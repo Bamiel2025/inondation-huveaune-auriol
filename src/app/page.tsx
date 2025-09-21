@@ -1,8 +1,10 @@
 "use client";
 
-import FloodMapSlider, { FloodZone } from "@/components/FloodMapSlider";
+import dynamic from 'next/dynamic';
 import FloodSidebar from "@/components/FloodSidebar";
 import { Badge } from "@/components/ui/badge";
+
+const FloodMapSlider = dynamic(() => import('@/components/FloodMapSlider'), { ssr: false });
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
