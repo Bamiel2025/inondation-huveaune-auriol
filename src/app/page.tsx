@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import FloodSidebar from "@/components/FloodSidebar";
 import { Badge } from "@/components/ui/badge";
+import type { FloodZone } from "@/components/FloodMapSlider";
 
 const FloodMapSlider = dynamic(() => import('@/components/FloodMapSlider'), { ssr: false });
 import { Button } from "@/components/ui/button";
