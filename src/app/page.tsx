@@ -1,8 +1,8 @@
 "use client";
 
 import FloodMapSlider, { FloodZone } from "@/components/FloodMapSlider";
-import FloodLegend from "@/components/FloodLegend";
 import FloodSidebar from "@/components/FloodSidebar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -14,52 +14,7 @@ const HAZARD_URL =
 const PLAN_URL =
   "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/project-uploads/ba1100f6-aa8b-475a-8126-0b094618ca93/generated_images/a-detailed-city-plan-map-of-auriol%2c-fr-e6b22a5b-20250920171753.jpg?";
 
-const ZONES: FloodZone[] = [
-  {
-    id: "pont-centre",
-    title: "Pont du centre-ville",
-    description:
-      "Le pont peut être submergé lors d'une crue importante. Risque d'interruption de circulation et d'accès aux services.",
-    x: 47,
-    y: 52,
-    w: 10,
-    h: 10,
-    riskLevel: "fort",
-  },
-  {
-    id: "quartier-sud",
-    title: "Quartier riverain (sud)",
-    description:
-      "Habitat individuel proche du lit. Prévoir information des riverains, surélévation des équipements et itinéraires d'évacuation.",
-    x: 60,
-    y: 62,
-    w: 16,
-    h: 12,
-    riskLevel: "moyen",
-  },
-  {
-    id: "zone-activite",
-    title: "Zone d'activités",
-    description:
-      "Commerces et ateliers exposés aux débordements. Impacts économiques possibles, sécuriser les stocks et produits.",
-    x: 30,
-    y: 58,
-    w: 15,
-    h: 10,
-    riskLevel: "faible",
-  },
-  {
-    id: "berges-vegetalisees",
-    title: "Berges végétalisées",
-    description:
-      "Secteur à aléa résiduel: rôle tampon en cas de crue, entretien écologique des berges recommandé.",
-    x: 75,
-    y: 45,
-    w: 12,
-    h: 8,
-    riskLevel: "résiduel",
-  },
-];
+const ZONES: FloodZone[] = [];
 
 export default function Page() {
   return (
@@ -88,7 +43,20 @@ export default function Page() {
       <main id="carte" className="grid max-w-6xl mx-auto w-full gap-4 lg:grid-cols-[1fr_320px]">
         <section className="space-y-3">
           <FloodMapSlider hazardImage={HAZARD_URL} planImage={PLAN_URL} zones={ZONES} className="aspect-[3/2] w-full" />
-          <FloodLegend />
+          <div className="rounded-lg border bg-card p-4 text-sm space-y-3">
+            <div className="space-y-2">
+              <h4 className="font-medium">Enjeux (exemples)</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Bâtiments d'habitation et écoles <Badge variant="secondary">population</Badge></li>
+                <li>Commerces et ateliers <Badge variant="secondary">économie</Badge></li>
+                <li>Ouvrages: ponts, voies, réseaux <Badge variant="secondary">infrastructures</Badge></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium">Lire la carte</h4>
+              <p>Glissez le curseur pour comparer le <strong>plan d'Auriol</strong> et la <strong>carte des aléas</strong>. Cliquez sur un émoji interactif pour avoir des informations détaillées.</p>
+            </div>
+          </div>
         </section>
         <aside className="min-h-[420px]">
           <FloodSidebar />
@@ -104,7 +72,7 @@ export default function Page() {
             <ol className="list-decimal pl-5 space-y-2">
               <li>Repérez sur le <strong>plan</strong> les quartiers et ouvrages principaux (ponts, routes, équipements).</li>
               <li>Faites glisser le <strong>curseur</strong> pour afficher la <strong>carte des aléas</strong> et comparez.</li>
-              <li>Cliquez sur les <strong>zones</strong> colorées et notez le niveau d'aléa et les <strong>enjeux</strong> présents.</li>
+              <li>Cliquez sur les <strong>émojis</strong> interactifs et identifiez le niveau d'aléa et les enjeux présents.</li>
               <li>Évaluez le <strong>risque</strong> (Aléa × Enjeux) pour 2 secteurs et proposez des mesures de prévention.</li>
             </ol>
             <Separator className="my-2" />

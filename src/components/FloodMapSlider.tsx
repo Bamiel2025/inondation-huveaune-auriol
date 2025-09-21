@@ -2,9 +2,8 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import FloodLegend from "@/components/FloodLegend";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -38,20 +37,136 @@ export function FloodMapSlider({ hazardImage, planImage, zones = [], className }
   const mapInstance = useRef<L.Map | null>(null);
   const [ratio, setRatio] = useState(0.6); // portion showing hazard image
   const dragging = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
+
+  // Add custom marker styles
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-marker {
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        text-align: center;
+        line-height: 30px;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
   // Alignment controls
   const [overlayOpacity, setOverlayOpacity] = useState(0.8);
   const [overlayOffset, setOverlayOffset] = useState({ x: 0, y: 0 });
   const [overlayScale, setOverlayScale] = useState(1);
   const [overlayRotation, setOverlayRotation] = useState(0); // degrees
+  // Map position
+  const [mapCenter, setMapCenter] = useState<L.LatLngExpression>([43.3668, 5.6349]);
+  const [mapZoom, setMapZoom] = useState(14);
+  const isUpdatingView = useRef(false);
+  // Legend position
+  const [legendPosition, setLegendPosition] = useState({ x: 10, y: 10 });
+  const [isEditingLegend, setIsEditingLegend] = useState(false);
+  const legendDrag = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  // Positioning zone
+  const [zoneRect, setZoneRect] = useState({ x: 50, y: 50, w: 300, h: 200 });
+  // Markers
+  const [markers, setMarkers] = useState([
+    { id: 'pont-banne', name: 'Pont de la Banne', emoji: '🌉', desc: 'Le pont peut être submergé lors d\'une crue importante. Risque d\'interruption de circulation et d\'accès aux services.', lat: 43.36685, lng: 5.6348 },
+    { id: 'college', name: 'Collège Ubelka', emoji: '🏫', desc: 'Nombreux élèves, suivre le Plan Particulier de Mise en Sûreté (PPMS) précisant les zones de refuge situées en étage ou hors d\'atteinte de la montée des eaux.', lat: 43.3619, lng: 5.6359 },
+    { id: 'quartier-riverain', name: 'Quartier riverain', emoji: '🏠', desc: 'Habitat individuel proche du lit. Prévoir information des riverains, surélévation des équipements et itinéraires d\'évacuation.', lat: 43.366, lng: 5.635 },
+    { id: 'zone-agricole', name: 'Zone agricole', emoji: '🚜', desc: 'Impacts économiques possibles.', lat: 43.365, lng: 5.635 },
+  ]);
+  const [isEditingMarkers, setIsEditingMarkers] = useState(false);
+  const [isEditingMap, setIsEditingMap] = useState(false);
+  const markersRef = useRef<L.Marker[]>([]);
+
+  // Load saved alignment settings from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('floodMapAlignment');
+    if (saved) {
+      try {
+        const { offset, scale, rotation, center, zoom, legendPos, zone, markers: savedMarkers } = JSON.parse(saved);
+        setOverlayOffset(offset || { x: 0, y: 0 });
+        setOverlayScale(scale || 1);
+        setOverlayRotation(rotation || 0);
+        setMapCenter(center || [43.3668, 5.6349]);
+        setMapZoom(zoom || 14);
+        setLegendPosition(legendPos || { x: 10, y: 10 });
+        setZoneRect(zone || { x: 50, y: 50, w: 200, h: 100 });
+        setMarkers(savedMarkers || markers);
+      } catch (e) {
+        console.warn('Failed to load saved alignment settings:', e);
+      }
+    }
+  }, []);
+
+  // Auto-save alignment settings to localStorage whenever they change
+  useEffect(() => {
+    const centerArray = Array.isArray(mapCenter) ? mapCenter : [mapCenter.lat, mapCenter.lng];
+    const settings = {
+      offset: overlayOffset,
+      scale: overlayScale,
+      rotation: overlayRotation,
+      center: centerArray,
+      zoom: mapZoom,
+      legendPos: legendPosition,
+      zone: zoneRect,
+      markers,
+    };
+    localStorage.setItem('floodMapAlignment', JSON.stringify(settings));
+  }, [overlayOffset, overlayScale, overlayRotation, mapCenter, mapZoom, legendPosition, zoneRect]);
+
+  // Save markers separately
+  useEffect(() => {
+    const saved = localStorage.getItem('floodMapAlignment');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      parsed.markers = markers;
+      localStorage.setItem('floodMapAlignment', JSON.stringify(parsed));
+    }
+  }, [markers]);
+
+  // Save alignment settings to localStorage
+  const saveAlignment = () => {
+    const map = mapInstance.current;
+    const currentCenter = map ? map.getCenter() : mapCenter;
+    const currentZoom = map ? map.getZoom() : mapZoom;
+    const centerArray = Array.isArray(currentCenter) ? currentCenter : [currentCenter.lat, currentCenter.lng];
+    const settings = {
+      offset: overlayOffset,
+      scale: overlayScale,
+      rotation: overlayRotation,
+      center: centerArray,
+      zoom: currentZoom,
+    };
+    localStorage.setItem('floodMapAlignment', JSON.stringify(settings));
+    alert('Paramètres d\'alignement sauvegardés !');
+  };
+
+  // Load alignment settings from localStorage
+  const loadAlignment = () => {
+    const saved = localStorage.getItem('floodMapAlignment');
+    if (saved) {
+      try {
+        const { offset, scale, rotation } = JSON.parse(saved);
+        setOverlayOffset(offset || { x: 0, y: 0 });
+        setOverlayScale(scale || 1);
+        setOverlayRotation(rotation || 0);
+      } catch (e) {
+        alert('Erreur lors du chargement des paramètres sauvegardés.');
+      }
+    } else {
+      alert('Aucun paramètre sauvegardé trouvé.');
+    }
+  };
   const overlayDrag = useRef<{
     startX: number;
     startY: number;
     origX: number;
     origY: number;
   } | null>(null);
-  // Reference landmarks layer toggle
-  const [showRefs, setShowRefs] = useState(true);
-  const refsLayerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     const onMove = (e: MouseEvent | TouchEvent) => {
@@ -99,22 +214,84 @@ export function FloodMapSlider({ hazardImage, planImage, zones = [], className }
     };
   }, []);
 
+  // Drag legend position
+  useEffect(() => {
+    const onPointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!legendDrag.current) return;
+      const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = "touches" in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+      const dx = clientX - legendDrag.current.startX;
+      const dy = clientY - legendDrag.current.startY;
+      setLegendPosition({ x: legendDrag.current.origX + dx, y: legendDrag.current.origY + dy });
+    };
+    const onPointerUp = () => {
+      legendDrag.current = null;
+    };
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("touchmove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+    window.addEventListener("touchend", onPointerUp);
+    return () => {
+      window.removeEventListener("mousemove", onPointerMove);
+      window.removeEventListener("touchmove", onPointerMove);
+      window.removeEventListener("mouseup", onPointerUp);
+      window.removeEventListener("touchend", onPointerUp);
+    };
+  }, []);
+
+
+
+
   // Initialize Leaflet map centered on Auriol (Bouches-du-Rhône, France)
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
-    // Auriol approx coordinates
-    const auriol: L.LatLngExpression = [43.3668, 5.6349];
     const map = L.map(mapRef.current, {
-      center: auriol,
-      zoom: 15,
-      zoomControl: true,
-      attributionControl: true,
+      center: mapCenter,
+      zoom: mapZoom,
+      zoomControl: false,
+      attributionControl: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      dragging: false,
+      touchZoom: false,
+      zoomSnap: 0.5,
     });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     mapInstance.current = map;
+    setMapReady(true);
+
+    // Add markers
+    markers.forEach((markerData, index) => {
+      const icon = L.divIcon({
+        html: markerData.emoji,
+        className: 'custom-marker',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+      });
+      const marker = L.marker([markerData.lat, markerData.lng], {
+        icon,
+        draggable: isEditingMarkers,
+      }).addTo(map).bindPopup(`<b>${markerData.name}</b><br>${markerData.desc}`);
+      marker.on('dragend', () => {
+        const newPos = marker.getLatLng();
+        setMarkers(prev => prev.map((m, i) => i === index ? { ...m, lat: newPos.lat, lng: newPos.lng } : m));
+      });
+      markersRef.current[index] = marker;
+    });
+
+    // Update state on map move/zoom
+    const updatePosition = () => {
+      if (isUpdatingView.current) return;
+      setMapCenter(map.getCenter());
+      setMapZoom(map.getZoom());
+    };
+    map.on('moveend', updatePosition);
+    map.on('zoomend', updatePosition);
 
     // Ensure Leaflet resizes correctly when container size changes
     const ro = new ResizeObserver(() => {
@@ -124,54 +301,57 @@ export function FloodMapSlider({ hazardImage, planImage, zones = [], className }
 
     return () => {
       ro.disconnect();
+      map.off('moveend', updatePosition);
+      map.off('zoomend', updatePosition);
       map.remove();
       mapInstance.current = null;
     };
   }, []);
 
-  // Create/Toggle reference landmarks (bridges, collège, Huveaune trace)
+  // Update map view when center or zoom changes
   useEffect(() => {
     const map = mapInstance.current;
-    if (!map) return;
-
-    // Clear previous layer
-    if (refsLayerRef.current) {
-      refsLayerRef.current.removeFrom(map);
-      refsLayerRef.current = null;
+    if (map) {
+      isUpdatingView.current = true;
+      map.setView(mapCenter, mapZoom);
+      isUpdatingView.current = false;
     }
+  }, [mapCenter, mapZoom]);
 
-    if (!showRefs) return;
+  // Update marker draggable when editing mode changes
+  useEffect(() => {
+    markersRef.current.forEach(marker => {
+      if (marker) {
+        if (isEditingMarkers) {
+          marker.dragging.enable();
+        } else {
+          marker.dragging.disable();
+        }
+      }
+    });
+  }, [isEditingMarkers]);
 
-    const refs = L.layerGroup();
-    const refStyle: L.PathOptions = { color: "#2563eb", opacity: 0.9, weight: 2, fillOpacity: 0.25 };
+  // Update map interactions when editing mode changes
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (map) {
+      if (isEditingMap) {
+        map.dragging.enable();
+        map.scrollWheelZoom.enable();
+        map.touchZoom.enable();
+        if (map.zoomControl) map.zoomControl.addTo(map);
+      } else {
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        map.touchZoom.disable();
+        if (map.zoomControl) map.zoomControl.remove();
+      }
+    }
+  }, [isEditingMap]);
 
-    // Pont du centre (approx)
-    L.circleMarker([43.36685, 5.6348], { radius: 6, ...refStyle }).addTo(refs).bindTooltip("Pont du centre");
-    // Pont en amont (approx)
-    L.circleMarker([43.3692, 5.6329], { radius: 6, ...refStyle }).addTo(refs).bindTooltip("Pont amont");
-    // Collège (approx)
-    L.circleMarker([43.3619, 5.6359], { radius: 6, ...refStyle }).addTo(refs).bindTooltip("Collège");
-    // Mairie (approx)
-    L.circleMarker([43.3672, 5.6357], { radius: 6, ...refStyle }).addTo(refs).bindTooltip("Mairie");
 
-    // Tracé simplifié de l'Huveaune à travers Auriol (approx points)
-    const huveauneCoords: L.LatLngExpression[] = [
-      [43.3712, 5.6308],
-      [43.3702, 5.6318],
-      [43.3694, 5.6326],
-      [43.3686, 5.6333],
-      [43.3677, 5.6342],
-      [43.3669, 5.6350],
-      [43.3662, 5.6357],
-      [43.3653, 5.6365],
-      [43.3643, 5.6373],
-      [43.3635, 5.6380],
-    ];
-    L.polyline(huveauneCoords, { color: "#0ea5e9", weight: 3, opacity: 0.9 }).addTo(refs).bindTooltip("Huveaune");
 
-    refs.addTo(map);
-    refsLayerRef.current = refs;
-  }, [showRefs]);
+
 
   return (
     <div className={cn("relative w-full overflow-hidden rounded-lg border", className)} ref={containerRef}>
@@ -228,111 +408,36 @@ export function FloodMapSlider({ hazardImage, planImage, zones = [], className }
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background text-foreground border rounded-full px-2 py-1 text-xs">Aléas ↔ Plan</div>
       </div>
 
-      {/* Clickable zones */}
-      <TooltipProvider>
-        {zones.map((z) => (
-          <Zone key={z.id} zone={z} />
-        ))}
-      </TooltipProvider>
 
       {/* Quick buttons */}
       <div className="absolute bottom-3 right-3 flex gap-2">
         <Button size="sm" variant="secondary" onClick={() => setRatio(1)}>Aléas</Button>
         <Button size="sm" variant="secondary" onClick={() => setRatio(0)}>Plan</Button>
         <Button size="sm" onClick={() => setRatio(0.5)}>50/50</Button>
+        <Button size="sm" variant={isEditingMarkers ? "default" : "outline"} onClick={() => setIsEditingMarkers(!isEditingMarkers)}>
+          {isEditingMarkers ? "Fin Marqueurs" : "Éditer Marqueurs"}
+        </Button>
+        <Button size="sm" variant={isEditingMap ? "default" : "outline"} onClick={() => setIsEditingMap(!isEditingMap)}>
+          {isEditingMap ? "Verrouiller Carte" : "Éditer Carte"}
+        </Button>
       </div>
 
-      {/* Alignment controls for precise superposition */}
-      <div className="absolute bottom-3 left-3 grid gap-1 bg-background/80 backdrop-blur border rounded-md p-2 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap">Opacité</span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={overlayOpacity}
-            onChange={(e) => setOverlayOpacity(parseFloat((e.target as HTMLInputElement).value))}
-            className="w-32"
-          />
-          <span>{Math.round(overlayOpacity * 100)}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Décalage</span>
-          <div className="grid grid-cols-4 gap-1">
-            <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => setOverlayOffset((o) => ({ ...o, y: o.y - 5 }))}>↑</Button>
-            <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => setOverlayOffset((o) => ({ ...o, y: o.y + 5 }))}>↓</Button>
-            <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => setOverlayOffset((o) => ({ ...o, x: o.x - 5 }))}>←</Button>
-            <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => setOverlayOffset((o) => ({ ...o, x: o.x + 5 }))}>→</Button>
-          </div>
-          <span className="text-muted-foreground">Maintenir Maj pour déplacer à la souris</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Échelle</span>
-          <Button size="sm" variant="secondary" onClick={() => setOverlayScale((s) => +(Math.max(0.5, s - 0.01)).toFixed(3))}>-</Button>
-          <span className="w-10 text-center">{Math.round(overlayScale * 100)}%</span>
-          <Button size="sm" variant="secondary" onClick={() => setOverlayScale((s) => +(Math.min(2, s + 0.01)).toFixed(3))}>+</Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Rotation</span>
-          <Button size="sm" variant="secondary" onClick={() => setOverlayRotation((r) => +(r - 0.5).toFixed(1))}>-</Button>
-          <span className="w-10 text-center">{overlayRotation.toFixed(1)}°</span>
-          <Button size="sm" variant="secondary" onClick={() => setOverlayRotation((r) => +(r + 0.5).toFixed(1))}>+</Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="inline-flex items-center gap-2 select-none">
-            <input type="checkbox" checked={showRefs} onChange={(e) => setShowRefs(e.target.checked)} />
-            <span>Repères (ponts, collège, Huveaune)</span>
-          </label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => { setOverlayOpacity(0.8); setOverlayOffset({ x: 0, y: 0 }); setOverlayScale(1); setOverlayRotation(0); }}>Réinitialiser</Button>
-        </div>
+      {/* Legend overlay */}
+      <div
+        className="absolute overflow-hidden"
+        style={{
+          left: `${zoneRect.x}px`,
+          top: `${zoneRect.y}px`,
+          width: `${zoneRect.w}px`,
+          height: `${zoneRect.h}px`,
+          clipPath: `inset(0 ${Math.max(0, (1 - ratio) * 100)}% 0 0)`,
+        }}
+      >
+        <FloodLegend />
       </div>
     </div>
   );
 }
 
-function Zone({ zone }: { zone: FloodZone }) {
-  const colors: Record<FloodZone["riskLevel"], string> = {
-    fort: "bg-red-500/30 border-red-500",
-    moyen: "bg-orange-500/30 border-orange-500",
-    faible: "bg-yellow-400/30 border-yellow-400",
-    résiduel: "bg-green-500/30 border-green-500",
-  };
-  return (
-    <Dialog>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <button
-              className={cn(
-                "absolute border backdrop-blur-[2px] transition-colors hover:bg-black/10",
-                colors[zone.riskLevel]
-              )}
-              style={{ left: `${zone.x}%`, top: `${zone.y}%`, width: `${zone.w}%`, height: `${zone.h}%` }}
-              aria-label={`Zone ${zone.title}`}
-            />
-          </DialogTrigger>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{zone.title}</p>
-        </TooltipContent>
-      </Tooltip>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{zone.title}</DialogTitle>
-          <DialogDescription>
-            Niveau d'aléa: <strong className="capitalize">{zone.riskLevel}</strong>
-          </DialogDescription>
-        </DialogHeader>
-        <div className="text-sm leading-relaxed space-y-2">
-          <p>{zone.description}</p>
-          <p className="text-muted-foreground">Consigne: Identifiez les bâtiments et infrastructures en jeu et proposez des mesures de prévention adaptées.</p>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default FloodMapSlider;
