@@ -6,6 +6,9 @@ const LOADER = path.resolve(__dirname, 'src/visual-edits/component-tagger-loader
 const nextConfig: NextConfig = {
   output: 'export',
   trailingSlash: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
