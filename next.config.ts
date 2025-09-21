@@ -4,6 +4,8 @@ import path from "node:path";
 const LOADER = path.resolve(__dirname, 'src/visual-edits/component-tagger-loader.js');
 
 const nextConfig: NextConfig = {
+  output: 'export',
+  trailingSlash: true,
   images: {
     remotePatterns: [
       {
@@ -15,6 +17,7 @@ const nextConfig: NextConfig = {
         hostname: '**',
       },
     ],
+    unoptimized: true,
   },
   outputFileTracingRoot: path.resolve(__dirname, '../../'),
   turbopack: {

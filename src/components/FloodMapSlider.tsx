@@ -318,10 +318,19 @@ export function FloodMapSlider({ hazardImage, planImage, zones = [], className }
     }
   }, [mapCenter, mapZoom]);
 
+  // Update marker positions when markers state changes
+  useEffect(() => {
+    markersRef.current.forEach((marker, index) => {
+      if (marker && markers[index]) {
+        marker.setLatLng([markers[index].lat, markers[index].lng]);
+      }
+    });
+  }, [markers]);
+
   // Update marker draggable when editing mode changes
   useEffect(() => {
     markersRef.current.forEach(marker => {
-      if (marker) {
+      if (marker && marker.dragging) {
         if (isEditingMarkers) {
           marker.dragging.enable();
         } else {

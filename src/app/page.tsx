@@ -44,14 +44,6 @@ export default function Page() {
         <section className="space-y-3">
           <FloodMapSlider hazardImage={HAZARD_URL} planImage={PLAN_URL} zones={ZONES} className="aspect-[3/2] w-full" />
           <div className="rounded-lg border bg-card p-4 text-sm space-y-3">
-            <div className="space-y-2">
-              <h4 className="font-medium">Enjeux (exemples)</h4>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Bâtiments d'habitation et écoles <Badge variant="secondary">population</Badge></li>
-                <li>Commerces et ateliers <Badge variant="secondary">économie</Badge></li>
-                <li>Ouvrages: ponts, voies, réseaux <Badge variant="secondary">infrastructures</Badge></li>
-              </ul>
-            </div>
             <div>
               <h4 className="font-medium">Lire la carte</h4>
               <p>Glissez le curseur pour comparer le <strong>plan d'Auriol</strong> et la <strong>carte des aléas</strong>. Cliquez sur un émoji interactif pour avoir des informations détaillées.</p>
